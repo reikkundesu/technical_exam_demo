@@ -32,11 +32,8 @@ class RegisterShopWebhooksJob implements ShouldQueue
     {
         $shop = Shop::findOrFail($this->shopId);
 
-        $destination = rtrim(config('app.webhook_url') ?? config('app.url'), '/') . '/webhooks/shopify';
-        // fallback to WEBHOOKS_SERVICE_URL env if set
-        if (empty($destination) && env('WEBHOOKS_SERVICE_URL')) {
-            $destination = rtrim(env('WEBHOOKS_SERVICE_URL'), '/') . '/webhooks/shopify';
-        }
+        $baseUrl = rtrim((string) (config('shopify.webhook_url') ?? config('app.url')), '/');
+        $destination = $baseUrl . '/webhooks/shopify';
 
         $results = $service->registerWebhooks($shop->shop_domain, $shop->access_token, $this->topics, $destination);
 

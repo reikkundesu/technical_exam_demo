@@ -30,10 +30,16 @@ class ShopifyWebhookRegistrationService
 
         foreach ($topics as $topic) {
             // use REST endpoint to create or update a webhook
-            $response = Http::withHeaders([
+            $client = Http::withHeaders([
                 'X-Shopify-Access-Token' => $accessToken,
                 'Content-Type' => 'application/json',
-            ])->post("https://{$shopDomain}/admin/api/{$apiVersion}/webhooks.json", [
+            ]);
+
+            if (config('shopify.skip_ssl_verify')) {
+                $client = $client->withoutVerifying();
+            }
+
+            $response = $client->post("https://{$shopDomain}/admin/api/{$apiVersion}/webhooks.json", [
                 'webhook' => [
                     'topic' => $topic,
                     'address' => $destinationUrl,
@@ -52,9 +58,13 @@ class ShopifyWebhookRegistrationService
             // if 422 (already exists) we need to attempt find existing
             if (!$id && $response->status() === 422) {
                 // list webhooks and match by topic/address
-                $list = Http::withHeaders([
+                $listClient = Http::withHeaders([
                     'X-Shopify-Access-Token' => $accessToken,
-                ])->get("https://{$shopDomain}/admin/api/{$apiVersion}/webhooks.json");
+                ]);
+                if (config('shopify.skip_ssl_verify')) {
+                    $listClient = $listClient->withoutVerifying();
+                }
+                $list = $listClient->get("https://{$shopDomain}/admin/api/{$apiVersion}/webhooks.json");
                 if ($list->successful()) {
                     foreach (Arr::get($list->json(), 'webhooks', []) as $wh) {
                         if (Arr::get($wh, 'topic') === $topic && Arr::get($wh, 'address') === $destinationUrl) {
