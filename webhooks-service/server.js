@@ -15,6 +15,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || '';
 const LARAVEL_API_URL = (process.env.LARAVEL_API_URL || '').replace(/\/$/, '');
+const LARAVEL_BASE_URL = (
+  process.env.LARAVEL_BASE_URL || LARAVEL_API_URL.replace(/\/api$/i, '')
+).replace(/\/$/, '');
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
 
 // Raw body is required for HMAC verification - must be before any JSON parser
@@ -71,6 +74,44 @@ async function forwardToLaravel(topic, shopDomain, webhookId, payload) {
   }
 }
 
+async function proxyToLaravel(req, res) {
+  if (!LARAVEL_BASE_URL) {
+    return res.status(500).send('Laravel base URL not configured');
+  }
+
+  try {
+    const targetUrl = `${LARAVEL_BASE_URL}${req.originalUrl}`;
+    const method = String(req.method || 'GET').toUpperCase();
+    const headers = { ...req.headers };
+
+    delete headers.host;
+    delete headers['content-length'];
+
+    const response = await axios({
+      method,
+      url: targetUrl,
+      headers,
+      data: method === 'GET' || method === 'HEAD' ? undefined : req.body,
+      timeout: 15000,
+      validateStatus: () => true,
+      responseType: 'arraybuffer',
+      maxRedirects: 0,
+    });
+
+    for (const [key, value] of Object.entries(response.headers || {})) {
+      if (key.toLowerCase() === 'transfer-encoding') continue;
+      if (typeof value !== 'undefined') {
+        res.setHeader(key, value);
+      }
+    }
+
+    return res.status(response.status).send(Buffer.from(response.data));
+  } catch (err) {
+    console.error('Proxy to Laravel failed', err.message);
+    return res.status(502).send('Bad Gateway');
+  }
+}
+
 function createWebhookHandler(defaultTopic) {
   return (req, res) => {
     const hmac = req.headers['x-shopify-hmac-sha256'];
@@ -112,9 +153,14 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'shopify-webhooks' });
 });
 
+app.use((req, res) => {
+  proxyToLaravel(req, res);
+});
+
 app.listen(PORT, () => {
   console.log(`Webhooks service listening on port ${PORT}`);
   if (!SHOPIFY_API_SECRET) console.warn('SHOPIFY_API_SECRET is not set');
   if (!INTERNAL_API_KEY) console.warn('INTERNAL_API_KEY is not set');
   if (!LARAVEL_API_URL) console.warn('LARAVEL_API_URL is not set');
+  if (!LARAVEL_BASE_URL) console.warn('LARAVEL_BASE_URL is not set');
 });
