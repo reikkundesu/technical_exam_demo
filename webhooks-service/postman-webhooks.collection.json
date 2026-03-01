@@ -1,0 +1,146 @@
+{
+  "info": {
+    "name": "Shopify Webhooks Service",
+    "description": "Tests required webhook endpoints with automatic HMAC signing.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const envSecretRaw = pm.environment.get('shopify_api_secret') || '';",
+          "const collectionSecretRaw = pm.collectionVariables.get('shopify_api_secret') || '';",
+          "function normalizeSecret(value) {",
+          "  let v = String(value || '').trim();",
+          "  if (v.includes('=')) v = v.split('=').pop().trim();",
+          "  v = v.replace(/^\"|\"$/g, '').replace(/^'|'$/g, '').trim();",
+          "  return v;",
+          "}",
+          "let secret = normalizeSecret(envSecretRaw);",
+          "if (!/^shpss_[a-f0-9]{32}$/i.test(secret)) {",
+          "  const fallback = normalizeSecret(collectionSecretRaw);",
+          "  if (/^shpss_[a-f0-9]{32}$/i.test(fallback)) secret = fallback;",
+          "}",
+          "if (!secret) {",
+          "  throw new Error('Missing environment variable: shopify_api_secret');",
+          "}",
+          "if (!/^shpss_[a-f0-9]{32}$/i.test(secret)) {",
+          "  throw new Error('shopify_api_secret format is invalid. Expected shpss_ + 32 hex chars');",
+          "}",
+          "const raw = pm.request.body && pm.request.body.raw ? pm.request.body.raw : '';",
+          "let signature = '';",
+          "if (typeof CryptoJS !== 'undefined') {",
+          "  signature = CryptoJS.enc.Base64.stringify(CryptoJS.HmacSHA256(raw, secret));",
+          "} else {",
+          "  const CryptoJSImport = pm.require('npm:crypto-js');",
+          "  signature = CryptoJSImport.enc.Base64.stringify(CryptoJSImport.HmacSHA256(raw, secret));",
+          "}",
+          "pm.variables.set('shopify_hmac', signature);",
+          "pm.environment.set('last_shopify_hmac', signature);",
+          "pm.request.headers.upsert({ key: 'X-Shopify-Hmac-Sha256', value: signature });",
+          "console.log('HMAC generated for body length:', raw.length);",
+          "console.log('HMAC prefix:', signature.substring(0, 8));",
+          "console.log('Secret length used:', secret.length);"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "POST /webhooks/products/update",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Shopify-Hmac-Sha256",
+            "value": "{{shopify_hmac}}"
+          },
+          {
+            "key": "X-Shopify-Shop-Domain",
+            "value": "{{shop_domain}}"
+          },
+          {
+            "key": "X-Shopify-Topic",
+            "value": "products/update"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": 7501831929953,\n  \"title\": \"Short sleeve T-shirt\",\n  \"vendor\": \"Rei\",\n  \"status\": \"active\",\n  \"updated_at\": \"2026-03-01T12:00:00Z\",\n  \"variants\": [\n    {\n      \"id\": 43728051732577,\n      \"price\": \"500.00\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{webhooks_base_url}}/webhooks/products/update",
+          "host": [
+            "{{webhooks_base_url}}"
+          ],
+          "path": [
+            "webhooks",
+            "products",
+            "update"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "POST /webhooks/orders/create",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Shopify-Hmac-Sha256",
+            "value": "{{shopify_hmac}}"
+          },
+          {
+            "key": "X-Shopify-Shop-Domain",
+            "value": "{{shop_domain}}"
+          },
+          {
+            "key": "X-Shopify-Topic",
+            "value": "orders/create"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": 987654321,\n  \"name\": \"#1001\",\n  \"total_price\": \"49.99\",\n  \"financial_status\": \"paid\",\n  \"fulfillment_status\": \"fulfilled\",\n  \"created_at\": \"2026-03-01T12:00:00Z\"\n}"
+        },
+        "url": {
+          "raw": "{{webhooks_base_url}}/webhooks/orders/create",
+          "host": [
+            "{{webhooks_base_url}}"
+          ],
+          "path": [
+            "webhooks",
+            "orders",
+            "create"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "webhooks_base_url",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "shop_domain",
+      "value": "tech-exam.myshopify.com"
+    },
+    {
+      "key": "shopify_api_secret",
+      "value": "YOUR_SHOPIFY_API_SECRET"
+    }
+  ]
+}

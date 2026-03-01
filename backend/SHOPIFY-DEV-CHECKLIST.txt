@@ -1,0 +1,14 @@
+SHOPIFY DEV APP CONNECTION CHECKLIST
+=====================================
+
+[ ] 1. Partner Dashboard: Copy Client ID and Client secret from your app
+[ ] 2. Start tunnel (ngrok http 8000) and note the HTTPS URL
+[ ] 3. In Partner Dashboard set:
+      - App URL = https://YOUR-NGROK-URL
+      - Allowed redirection URL = https://YOUR-NGROK-URL/shopify/callback
+[ ] 4. backend/.env: Set APP_URL, DB_*, SHOPIFY_API_KEY, SHOPIFY_API_SECRET,
+      SHOPIFY_SCOPES=read_products,write_products,read_orders,write_orders,
+      SHOPIFY_API_VERSION=2024-01, INTERNAL_API_KEY
+[ ] 5. Run: php artisan key:generate && php artisan migrate
+[ ] 6. Visit: https://YOUR-NGROK-URL/shopify/install?shop=YOUR-DEV-STORE.myshopify.com
+[ ] 7. Complete install in Shopify; confirm JSON success response
